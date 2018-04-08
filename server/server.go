@@ -5,41 +5,50 @@ import (
 	"net"
 	"sync"
 
-	"net/conns"
+	"github.com/GitOBHub/net/conns"
 )
 
 type Server struct {
-	Address        string
-	Listener       net.Listener
-	NumConn        int
-	mu             sync.Mutex
-	messageHandler HandlerFunc
+	Address           string
+	NumConn           int
+	mu                sync.Mutex
+	messageHandler    MessageHandlerFunc
+	connectionHandler ConnectionHandlerFunc
 }
 
-type HandlerFunc func(*conns.Connection, []byte)
+type MessageHandlerFunc func(*conns.Connection, []byte)
+type ConnectionHandlerFunc func(*conns.Connection)
 
-var defaultMessageHandler HandlerFunc
+var defaultMessageHandler MessageHandlerFunc
 
-func (f HandlerFunc) handle(conn *conns.Connection, data []byte) {
+func (f MessageHandlerFunc) handle(conn *conns.Connection, data []byte) {
 	f(conn, data)
 }
 
-func NewServer(addr string) (*Server, error) {
-	ln, err := net.Listen("tcp", addr)
+func (f ConnectionHandlerFunc) handle(conn *conns.Connection) {
+	f(conn)
+}
+
+func NewServer(addr string) *Server {
+	srv := &Server{Address: addr}
+	return srv
+}
+
+func (s *Server) MessageHandleFunc(handler func(*conns.Connection, []byte)) {
+	s.messageHandler = MessageHandlerFunc(handler)
+}
+
+func (s *Server) ConnectionHandleFunc(handler func(*conns.Connection)) {
+	s.connectionHandler = ConnectionHandlerFunc(handler)
+}
+
+func (s *Server) ListenAndServe() error {
+	ln, err := net.Listen("tcp", s.Address)
 	if err != nil {
-		return nil, err
+		return err
 	}
-	srv := &Server{Address: addr, Listener: ln}
-	return srv, nil
-}
-
-func (s *Server) HandleFunc(handler func(*conns.Connection, []byte)) {
-	s.messageHandler = HandlerFunc(handler)
-}
-
-func (s *Server) Serve() {
 	for {
-		c, err := s.Listener.Accept()
+		c, err := ln.Accept()
 		if err != nil {
 			log.Print(err)
 			continue
@@ -47,7 +56,7 @@ func (s *Server) Serve() {
 		s.mu.Lock()
 		s.NumConn++
 		s.mu.Unlock()
-		conn := &conns.Connection{Conn: c, Number: s.NumConn}
+		conn := &conns.Connection{Conn: c, Number: s.NumConn, Connected: true}
 		log.Printf("connection#%d is up", conn.Number)
 		go s.handleConn(conn)
 	}
@@ -59,10 +68,16 @@ func (s *Server) handleConn(conn *conns.Connection) {
 		log.Printf("connection#%d is down", conn.Number)
 	}()
 	for {
-		data, _ := conn.Read()
+		data, _ := conn.Recv()
 		if data == nil {
 			break
 		}
-		s.messageHandler.handle(conn, data)
+		if s.messageHandler != nil {
+			s.messageHandler.handle(conn, data)
+		}
+	}
+	conn.Connected = false
+	if s.connectionHandler != nil {
+		s.connectionHandler.handle(conn)
 	}
 }
