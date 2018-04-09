@@ -9,29 +9,36 @@ import (
 	"strings"
 )
 
-type Connection struct {
+type Conn struct {
 	net.Conn
-	Number    int
 	Connected bool
+	reader    *bufio.Reader
 }
 
-func (conn *Connection) Recv() ([]byte, error) {
-	rd := bufio.NewReader(conn.Conn)
-	dataLenStr, err := rd.ReadString('\n')
+func NewConn(c net.Conn) *Conn {
+	conn := new(Conn)
+	conn.Conn = c
+	conn.Connected = true
+	conn.reader = bufio.NewReader(c)
+	return conn
+}
+
+func (conn *Conn) Recv() ([]byte, error) {
+	dataLenStr, err := conn.reader.ReadString('\n')
 	if err != nil {
 		return nil, err
 	}
 	dataLenStr = strings.TrimSuffix(dataLenStr, "\r\n")
 	dataLen, _ := strconv.Atoi(dataLenStr)
 	data := make([]byte, dataLen)
-	rd.Read(data)
+	conn.reader.Read(data)
 	//	log.Printf("read: %q", string(data))
 	return data, nil
 }
 
-func (conn *Connection) Send(data []byte) (int, error) {
+func (conn *Conn) Send(data []byte) (int, error) {
 	dataLen := strconv.Itoa(len(data))
 	toSend := dataLen + "\r\n" + string(data)
-	//	log.Printf("send: %q", toSend)
+	//log.Printf("send: %q", toSend)
 	return io.WriteString(conn, toSend)
 }

@@ -16,16 +16,16 @@ type Server struct {
 	connectionHandler ConnectionHandlerFunc
 }
 
-type MessageHandlerFunc func(*conns.Connection, []byte)
-type ConnectionHandlerFunc func(*conns.Connection)
+type MessageHandlerFunc func(*conns.Conn, []byte)
+type ConnectionHandlerFunc func(*conns.Conn)
 
 var defaultMessageHandler MessageHandlerFunc
 
-func (f MessageHandlerFunc) handle(conn *conns.Connection, data []byte) {
+func (f MessageHandlerFunc) handle(conn *conns.Conn, data []byte) {
 	f(conn, data)
 }
 
-func (f ConnectionHandlerFunc) handle(conn *conns.Connection) {
+func (f ConnectionHandlerFunc) handle(conn *conns.Conn) {
 	f(conn)
 }
 
@@ -34,11 +34,11 @@ func NewServer(addr string) *Server {
 	return srv
 }
 
-func (s *Server) MessageHandleFunc(handler func(*conns.Connection, []byte)) {
+func (s *Server) MessageHandleFunc(handler func(*conns.Conn, []byte)) {
 	s.messageHandler = MessageHandlerFunc(handler)
 }
 
-func (s *Server) ConnectionHandleFunc(handler func(*conns.Connection)) {
+func (s *Server) ConnectionHandleFunc(handler func(*conns.Conn)) {
 	s.connectionHandler = ConnectionHandlerFunc(handler)
 }
 
@@ -56,16 +56,16 @@ func (s *Server) ListenAndServe() error {
 		s.mu.Lock()
 		s.NumConn++
 		s.mu.Unlock()
-		conn := &conns.Connection{Conn: c, Number: s.NumConn, Connected: true}
-		log.Printf("connection#%d is up", conn.Number)
+		conn := conns.NewConn(c)
+		log.Printf("connection#%d %s -> %s is up", s.NumConn, conn.RemoteAddr(), conn.LocalAddr())
 		go s.handleConn(conn)
 	}
 }
 
-func (s *Server) handleConn(conn *conns.Connection) {
+func (s *Server) handleConn(conn *conns.Conn) {
 	defer func() {
 		conn.Close()
-		log.Printf("connection#%d is down", conn.Number)
+		log.Printf("connection# %s -> %s is down", conn.RemoteAddr(), conn.LocalAddr())
 	}()
 	for {
 		data, _ := conn.Recv()
