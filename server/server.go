@@ -5,41 +5,29 @@ import (
 	"net"
 	"sync"
 
-	"github.com/GitOBHub/net/conns"
+	"github.com/gitobhub/net/conns"
 )
 
 type Server struct {
-	Address           string
-	NumConn           int
-	mu                sync.Mutex
-	messageHandler    MessageHandlerFunc
-	connectionHandler ConnectionHandlerFunc
+	Address string
+	NumConn int
+	mu      sync.Mutex
+	Handler Handler
 }
 
 type MessageHandlerFunc func(*conns.Conn, []byte)
 type ConnectionHandlerFunc func(*conns.Conn)
 
+type Handler interface {
+	HandleMessage(*conns.Conn, []byte)
+	HandleConn(*conns.Conn)
+}
+
 var defaultMessageHandler MessageHandlerFunc
 
-func (f MessageHandlerFunc) handle(conn *conns.Conn, data []byte) {
-	f(conn, data)
-}
-
-func (f ConnectionHandlerFunc) handle(conn *conns.Conn) {
-	f(conn)
-}
-
-func NewServer(addr string) *Server {
-	srv := &Server{Address: addr}
+func NewServer(addr string, handler Handler) *Server {
+	srv := &Server{Address: addr, Handler: handler}
 	return srv
-}
-
-func (s *Server) MessageHandleFunc(handler func(*conns.Conn, []byte)) {
-	s.messageHandler = MessageHandlerFunc(handler)
-}
-
-func (s *Server) ConnectionHandleFunc(handler func(*conns.Conn)) {
-	s.connectionHandler = ConnectionHandlerFunc(handler)
 }
 
 func (s *Server) ListenAndServe() error {
@@ -72,12 +60,8 @@ func (s *Server) handleConn(conn *conns.Conn) {
 		if data == nil {
 			break
 		}
-		if s.messageHandler != nil {
-			s.messageHandler.handle(conn, data)
-		}
+		s.Handler.HandleMessage(conn, data)
 	}
 	conn.Connected = false
-	if s.connectionHandler != nil {
-		s.connectionHandler.handle(conn)
-	}
+	s.Handler.HandleConn(conn)
 }

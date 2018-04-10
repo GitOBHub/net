@@ -3,7 +3,7 @@ package client
 import (
 	"net"
 
-	"server/chat/server/serverTemp/conns"
+	"github.com/gitobhub/net/conns"
 )
 
 type Client struct {
