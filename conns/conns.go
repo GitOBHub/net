@@ -9,6 +9,15 @@ import (
 	"strings"
 )
 
+type ConnInterface interface {
+	net.Conn
+	New(net.Conn) ConnInterface
+	Recv() ([]byte, error)
+	Send([]byte) (int, error)
+	IsConnected() bool
+	SetConnected(bool)
+}
+
 type Conn struct {
 	net.Conn
 	Connected bool
@@ -21,6 +30,10 @@ func NewConn(c net.Conn) *Conn {
 	conn.Connected = true
 	conn.reader = bufio.NewReader(c)
 	return conn
+}
+
+func (conn *Conn) New(c net.Conn) ConnInterface {
+	return NewConn(c)
 }
 
 func (conn *Conn) Recv() ([]byte, error) {
@@ -41,4 +54,12 @@ func (conn *Conn) Send(data []byte) (int, error) {
 	toSend := dataLen + "\r\n" + string(data)
 	//log.Printf("send: %q", toSend)
 	return io.WriteString(conn, toSend)
+}
+
+func (conn *Conn) IsConnected() bool {
+	return conn.Connected
+}
+
+func (conn *Conn) SetConnected(status bool) {
+	conn.Connected = status
 }

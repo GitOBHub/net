@@ -9,25 +9,31 @@ import (
 )
 
 type Server struct {
-	Address string
-	NumConn int
-	mu      sync.Mutex
-	Handler Handler
+	Address  string
+	Handler  Handler
+	ConnType conns.ConnInterface
+	mu       sync.Mutex
+	numConn  int
 }
 
-type MessageHandlerFunc func(*conns.Conn, []byte)
-type ConnectionHandlerFunc func(*conns.Conn)
+type MessageHandlerFunc func(conns.ConnInterface, []byte)
+type ConnectionHandlerFunc func(conns.ConnInterface)
 
 type Handler interface {
-	HandleMessage(*conns.Conn, []byte)
-	HandleConn(*conns.Conn)
+	HandleMessage(conns.ConnInterface, []byte)
+	HandleConn(conns.ConnInterface)
 }
 
-var defaultMessageHandler MessageHandlerFunc
+//TODO:
+var defaultHandler Handler
 
 func NewServer(addr string, handler Handler) *Server {
 	srv := &Server{Address: addr, Handler: handler}
 	return srv
+}
+
+func (s *Server) SetConnType(c conns.ConnInterface) {
+	s.ConnType = c
 }
 
 func (s *Server) ListenAndServe() error {
@@ -41,27 +47,37 @@ func (s *Server) ListenAndServe() error {
 			log.Print(err)
 			continue
 		}
-		s.mu.Lock()
-		s.NumConn++
-		s.mu.Unlock()
-		conn := conns.NewConn(c)
-		log.Printf("connection#%d %s -> %s is up", s.NumConn, conn.RemoteAddr(), conn.LocalAddr())
+		s.numConn++
+
+		var conn conns.ConnInterface
+		if s.ConnType == nil {
+			conn = conns.NewConn(c)
+		} else {
+			conn = s.ConnType.New(c)
+		}
+		log.Printf("connection#%d %s -> %s is up", s.numConn, conn.RemoteAddr(), conn.LocalAddr())
 		go s.handleConn(conn)
 	}
 }
 
-func (s *Server) handleConn(conn *conns.Conn) {
+func (s *Server) handleConn(conn conns.ConnInterface) {
 	defer func() {
 		conn.Close()
-		log.Printf("connection# %s -> %s is down", conn.RemoteAddr(), conn.LocalAddr())
+		log.Printf("connection %s -> %s is down", conn.RemoteAddr(), conn.LocalAddr())
 	}()
 	for {
 		data, _ := conn.Recv()
 		if data == nil {
 			break
 		}
-		s.Handler.HandleMessage(conn, data)
+		//TODO
+		if s.Handler != nil {
+			s.Handler.HandleMessage(conn, data)
+		}
 	}
-	conn.Connected = false
-	s.Handler.HandleConn(conn)
+	conn.SetConnected(false)
+	if s.Handler != nil {
+		s.Handler.HandleConn(conn)
+	}
+
 }
