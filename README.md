@@ -1,2 +1,2 @@
 # net
-To build server and client
+To build server
