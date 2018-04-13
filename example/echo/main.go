@@ -16,6 +16,3 @@ func main() {
 func (h EchoHandler) HandleMessage(c server.ConnInterface, b []byte) {
 	c.Write(b)
 }
-
-func (h EchoHandler) HandleConn(c server.ConnInterface) {
-}

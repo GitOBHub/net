@@ -8,7 +8,7 @@ import (
 
 type Server struct {
 	Address  string
-	Handler  Handler
+	Handler  MessageCloseHandler
 	ConnType ConnInterface
 	mu       sync.Mutex
 	numConn  int
@@ -17,16 +17,41 @@ type Server struct {
 type MessageHandlerFunc func(ConnInterface, []byte)
 type ConnectionHandlerFunc func(ConnInterface)
 
-type Handler interface {
+type MessageHandler interface {
 	HandleMessage(ConnInterface, []byte)
-	HandleConn(ConnInterface)
+}
+
+type CloseHandler interface {
+	HandleClose(ConnInterface)
+}
+
+type MessageCloseHandler interface {
+	MessageHandler
+	CloseHandler
+}
+
+//NopCloser
+type NopCloser struct {
+	MessageHandler
+}
+
+func (h NopCloser) HandleClose(ConnInterface) {
+	//null
+}
+
+func NopCloseHandler(h MessageHandler) MessageCloseHandler {
+	return NopCloser{h}
 }
 
 //TODO:
-var defaultHandler Handler
+var defaultHandler MessageCloseHandler
 
-func NewServer(addr string, handler Handler) *Server {
-	srv := &Server{Address: addr, Handler: handler}
+func NewServer(addr string, handler MessageHandler) *Server {
+	mc, ok := handler.(MessageCloseHandler)
+	if !ok && handler != nil {
+		mc = NopCloseHandler(handler)
+	}
+	srv := &Server{Address: addr, Handler: mc}
 	return srv
 }
 
@@ -75,7 +100,7 @@ func (s *Server) handleConn(conn ConnInterface) {
 	}
 	conn.SetConnected(false)
 	if s.Handler != nil {
-		s.Handler.HandleConn(conn)
+		s.Handler.HandleClose(conn)
 	}
 
 }
