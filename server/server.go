@@ -4,24 +4,22 @@ import (
 	"log"
 	"net"
 	"sync"
-
-	"github.com/gitobhub/net/conns"
 )
 
 type Server struct {
 	Address  string
 	Handler  Handler
-	ConnType conns.ConnInterface
+	ConnType ConnInterface
 	mu       sync.Mutex
 	numConn  int
 }
 
-type MessageHandlerFunc func(conns.ConnInterface, []byte)
-type ConnectionHandlerFunc func(conns.ConnInterface)
+type MessageHandlerFunc func(ConnInterface, []byte)
+type ConnectionHandlerFunc func(ConnInterface)
 
 type Handler interface {
-	HandleMessage(conns.ConnInterface, []byte)
-	HandleConn(conns.ConnInterface)
+	HandleMessage(ConnInterface, []byte)
+	HandleConn(ConnInterface)
 }
 
 //TODO:
@@ -32,7 +30,7 @@ func NewServer(addr string, handler Handler) *Server {
 	return srv
 }
 
-func (s *Server) SetConnType(c conns.ConnInterface) {
+func (s *Server) SetConnType(c ConnInterface) {
 	s.ConnType = c
 }
 
@@ -49,9 +47,9 @@ func (s *Server) ListenAndServe() error {
 		}
 		s.numConn++
 
-		var conn conns.ConnInterface
+		var conn ConnInterface
 		if s.ConnType == nil {
-			conn = conns.NewConn(c)
+			conn = NewConn(c)
 		} else {
 			conn = s.ConnType.New(c)
 		}
@@ -60,7 +58,7 @@ func (s *Server) ListenAndServe() error {
 	}
 }
 
-func (s *Server) handleConn(conn conns.ConnInterface) {
+func (s *Server) handleConn(conn ConnInterface) {
 	defer func() {
 		conn.Close()
 		log.Printf("connection %s -> %s is down", conn.RemoteAddr(), conn.LocalAddr())
